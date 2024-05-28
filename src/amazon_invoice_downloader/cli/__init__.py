@@ -34,16 +34,17 @@ from amazon_invoice_downloader.__about__ import __version__
 
 from playwright.sync_api import sync_playwright, TimeoutError
 from datetime import datetime
+import locale
 import random
 import time
 import os
-import sys
 from docopt import docopt
 
 
 def sleep():
     # Add human latency
     # Generate a random sleep time between 3 and 5 seconds
+    print("Sleeping...")
     sleep_time = random.uniform(2, 5)
     # Sleep for the generated time
     time.sleep(sleep_time)
@@ -52,11 +53,14 @@ def sleep():
 def sleep_short():
     # Add human latency
     # Generate a random sleep time between 3 and 5 seconds
+    print("Sleeping...")
     sleep_time = random.uniform(0.5, 2.2)
     # Sleep for the generated time
     time.sleep(sleep_time)
 
 def run(playwright, args):
+    locale.setlocale(locale.LC_ALL, 'de_DE.UTF-8')
+
     email = args.get('--email')
     if email == '$AMAZON_EMAIL':
         email = os.environ.get('AMAZON_EMAIL')
@@ -88,7 +92,7 @@ def run(playwright, args):
     context = browser.new_context()
 
     page = context.new_page()
-    page.goto("https://www.amazon.com/")
+    page.goto("https://www.amazon.de/")
 
     # Sometimes, we are interrupted by a bot check, so let the user solve it
     page.wait_for_selector('a[data-nav-role="signin"] span', timeout=0).click()
@@ -134,7 +138,7 @@ def run(playwright, args):
                 if first_page:
                     first_page = False
                 else:
-                    page.get_by_role("link", name="Next →").click()
+                    page.get_by_role("link", name="Weiter →").click()
                 sleep()  # sleep after every page load
             except TimeoutError:
                 # There are no more pages
@@ -145,11 +149,11 @@ def run(playwright, args):
             for order_card in order_cards:
                 # Parse the order card to create the date and file_name
                 spans = order_card.query_selector_all("span")
-                date = datetime.strptime(spans[1].inner_text(), "%B %d, %Y")
-                total = spans[3].inner_text().replace("$", "").replace(",", "")  # remove dollar sign and commas
+                date = datetime.strptime(spans[1].inner_text(), "%d. %B %Y")
+                total = spans[3].inner_text().replace(" €", "").replace("€", "").replace(".", "")  # remove dollar sign and commas
                 orderid = order_card.query_selector(".yohtmlc-order-id span:last-of-type").inner_text()
-                date_str = date.strftime("%Y%m%d")
-                file_name = f"{target_dir}/{date_str}_{total}_amazon_{orderid}.pdf"
+                date_str = date.strftime("%Y-%m-%d")
+                file_name = f"{target_dir}/Amazon_{date_str}_{orderid}_{total}.pdf"
 
                 if date > end_date:
                     continue
