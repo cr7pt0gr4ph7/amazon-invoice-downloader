@@ -49,6 +49,13 @@ def sleep():
     time.sleep(sleep_time)
 
 
+def sleep_short():
+    # Add human latency
+    # Generate a random sleep time between 3 and 5 seconds
+    sleep_time = random.uniform(0.5, 2.2)
+    # Sleep for the generated time
+    time.sleep(sleep_time)
+
 def run(playwright, args):
     email = args.get('--email')
     if email == '$AMAZON_EMAIL':
@@ -84,7 +91,7 @@ def run(playwright, args):
     page.goto("https://www.amazon.com/")
 
     # Sometimes, we are interrupted by a bot check, so let the user solve it
-    page.wait_for_selector('span >> text=Hello, sign in', timeout=0).click()
+    page.wait_for_selector('a[data-nav-role="signin"] span', timeout=0).click()
 
     if email:
         page.get_by_label("Email").click()
@@ -97,7 +104,7 @@ def run(playwright, args):
         page.get_by_label("Keep me signed in").check()
         page.get_by_role("button", name="Sign in").click()
 
-    page.wait_for_selector('a >> text=Returns & Orders', timeout=0).click()
+    page.wait_for_selector('a#nav-orders', timeout=0).click()
     sleep()
 
     # Get a list of years from the select options
@@ -140,7 +147,7 @@ def run(playwright, args):
                 spans = order_card.query_selector_all("span")
                 date = datetime.strptime(spans[1].inner_text(), "%B %d, %Y")
                 total = spans[3].inner_text().replace("$", "").replace(",", "")  # remove dollar sign and commas
-                orderid = spans[9].inner_text()
+                orderid = order_card.query_selector(".yohtmlc-order-id span:last-of-type").inner_text()
                 date_str = date.strftime("%Y%m%d")
                 file_name = f"{target_dir}/{date_str}_{total}_amazon_{orderid}.pdf"
 
@@ -154,18 +161,30 @@ def run(playwright, args):
                     print(f"File [{file_name}] already exists")
                 else:
                     print(f"Saving file [{file_name}]")
-                    # Save
-                    link = "https://www.amazon.com/" + order_card.query_selector(
-                        'xpath=//a[contains(text(), "View invoice")]'
-                    ).get_attribute("href")
-                    invoice_page = context.new_page()
-                    invoice_page.goto(link)
-                    invoice_page.pdf(
-                        path=file_name,
-                        format="Letter",
-                        margin={"top": ".5in", "right": ".5in", "bottom": ".5in", "left": ".5in"},
-                    )
-                    invoice_page.close()
+
+                    # Open popover with PDF link
+                    order_card.query_selector(".order-header .a-declarative a, .order-info .a-declarative a").click()
+                    order_popup = page.wait_for_selector('.a-popover[aria-hidden="false"]')
+                    link_selector = 'xpath=//a[contains(@href, "/documents/download/")]'
+                    order_popup.wait_for_selector(link_selector)
+                    order_popup.eval_on_selector(link_selector, 'node => node.download = "invoice.pdf"')
+                    link_selector_download = 'xpath=//a[contains(@href, "/documents/download/") and @download]'
+
+                    # Click PDF link
+                    with page.expect_download() as download_info:
+                        order_popup.wait_for_selector(link_selector_download).click()
+
+                    # Save to file
+                    download_info.value.save_as(file_name)
+
+                    # Wait for the download to finish
+                    download_info.value.failure()
+
+                    # Close popover
+                    order_popup.query_selector('button[data-action="a-popover-close"]').click()
+                    order_popup.wait_for_selector('button[data-action="a-popover-close"]', state='hidden')
+
+                    sleep_short()  # sleep after every page load
 
     # Close the browser
     context.close()
