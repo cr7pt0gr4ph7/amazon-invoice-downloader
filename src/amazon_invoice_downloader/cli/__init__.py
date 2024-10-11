@@ -94,6 +94,8 @@ def run(playwright, args):
     page = context.new_page()
     page.goto("https://www.amazon.de/")
 
+    print("Waiting for signin link...")
+
     # Sometimes, we are interrupted by a bot check, so let the user solve it
     page.wait_for_selector('a[data-nav-role="signin"] span', timeout=0).click()
 
@@ -107,6 +109,8 @@ def run(playwright, args):
         page.get_by_label("Password").fill(password)
         page.get_by_label("Keep me signed in").check()
         page.get_by_role("button", name="Sign in").click()
+
+    print("Waiting for signin to complete...")
 
     page.wait_for_selector('a#nav-orders', timeout=0).click()
     sleep()
