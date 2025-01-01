@@ -28,7 +28,9 @@ The script will skip downloading a file if it already exists in the `./downloads
 ## Installation
 
 ```console
-pip install amazon-invoice-downloader
+git clone <repo>
+cd <target_dir>
+pip install --editable .
 playwright install
 ```
 
